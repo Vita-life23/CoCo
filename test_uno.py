@@ -10,7 +10,7 @@ def test_u():
     # # this is Python library
     # requests.get("https://www.qa.saatchiart.com/easel_api/artwork/413499/6858357")
     # # go to postman and take URL from GET requests
-    # # combane REQUEST into VARIABLE
+    # # combine REQUEST into VARIABLE
     # # now we check our RESPONSE (this is class)
     # response=requests.get("https://www.qa.saatchiart.com/easel_api/artwork/413499/6858357")
     # print(response)

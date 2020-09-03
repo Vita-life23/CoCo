@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <title>Test Report</title>
+    <link href="assets/style.css" rel="stylesheet" type="text/css"/></head>
+  <body onLoad="init()">
+    <script>/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+
+function toArray(iter) {
+    if (iter === null) {
+        return null;
+    }
+    return Array.prototype.slice.call(iter);
+}
+
+function find(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return elem.querySelector(selector);
+}
+
+function find_all(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return toArray(elem.querySelectorAll(selector));
+}
+
+function sort_column(elem) {
+    toggle_sort_states(elem);
+    var colIndex = toArray(elem.parentNode.childNodes).indexOf(elem);
+    var key;
+    if (elem.classList.contains('numeric')) {
+        key = key_num;
+    } else if (elem.classList.contains('result')) {
+        key = key_result;
+    } else {
+        key = key_alpha;
+    }
+    sort_table(elem, key(colIndex));
+}
+
+function show_all_extras() {
+    find_all('.col-result').forEach(show_extras);
+}
+
+function hide_all_extras() {
+    find_all('.col-result').forEach(hide_extras);
+}
+
+function show_extras(colresult_elem) {
+    var extras = colresult_elem.parentNode.nextElementSibling;
+    var expandcollapse = colresult_elem.firstElementChild;
+    extras.classList.remove("collapsed");
+    expandcollapse.classList.remove("expander");
+    expandcollapse.classList.add("collapser");
+}
+
+function hide_extras(colresult_elem) {
+    var extras = colresult_elem.parentNode.nextElementSibling;
+    var expandcollapse = colresult_elem.firstElementChild;
+    extras.classList.add("collapsed");
+    expandcollapse.classList.remove("collapser");
+    expandcollapse.classList.add("expander");
+}
+
+function show_filters() {
+    var filter_items = document.getElementsByClassName('filter');
+    for (var i = 0; i < filter_items.length; i++)
+        filter_items[i].hidden = false;
+}
+
+function add_collapse() {
+    // Add links for show/hide all
+    var resulttable = find('table#results-table');
+    var showhideall = document.createElement("p");
+    showhideall.innerHTML = '<a href="javascript:show_all_extras()">Show all details</a> / ' +
+                            '<a href="javascript:hide_all_extras()">Hide all details</a>';
+    resulttable.parentElement.insertBefore(showhideall, resulttable);
+
+    // Add show/hide link to each result
+    find_all('.col-result').forEach(function(elem) {
+        var collapsed = get_query_parameter('collapsed') || 'Passed';
+        var extras = elem.parentNode.nextElementSibling;
+        var expandcollapse = document.createElement("span");
+        if (extras.classList.contains("collapsed")) {
+            expandcollapse.classList.add("expander")
+        } else if (collapsed.includes(elem.innerHTML)) {
+            extras.classList.add("collapsed");
+            expandcollapse.classList.add("expander");
+        } else {
+            expandcollapse.classList.add("collapser");
+        }
+        elem.appendChild(expandcollapse);
+
+        elem.addEventListener("click", function(event) {
+            if (event.currentTarget.parentNode.nextElementSibling.classList.contains("collapsed")) {
+                show_extras(event.currentTarget);
+            } else {
+                hide_extras(event.currentTarget);
+            }
+        });
+    })
+}
+
+function get_query_parameter(name) {
+    var match = RegExp('[?&]' + name + '=([^&]*)').exec(window.location.search);
+    return match && decodeURIComponent(match[1].replace(/\+/g, ' '));
+}
+
+function init () {
+    reset_sort_headers();
+
+    add_collapse();
+
+    show_filters();
+
+    sort_column(find('.initial-sort'));
+
+    find_all('.sortable').forEach(function(elem) {
+        elem.addEventListener("click",
+                              function(event) {
+                                  sort_column(elem);
+                              }, false)
+    });
+
+};
+
+function sort_table(clicked, key_func) {
+    var rows = find_all('.results-table-row');
+    var reversed = !clicked.classList.contains('asc');
+    var sorted_rows = sort(rows, key_func, reversed);
+    /* Whole table is removed here because browsers acts much slower
+     * when appending existing elements.
+     */
+    var thead = document.getElementById("results-table-head");
+    document.getElementById('results-table').remove();
+    var parent = document.createElement("table");
+    parent.id = "results-table";
+    parent.appendChild(thead);
+    sorted_rows.forEach(function(elem) {
+        parent.appendChild(elem);
+    });
+    document.getElementsByTagName("BODY")[0].appendChild(parent);
+}
+
+function sort(items, key_func, reversed) {
+    var sort_array = items.map(function(item, i) {
+        return [key_func(item), i];
+    });
+
+    sort_array.sort(function(a, b) {
+        var key_a = a[0];
+        var key_b = b[0];
+
+        if (key_a == key_b) return 0;
+
+        if (reversed) {
+            return (key_a < key_b ? 1 : -1);
+        } else {
+            return (key_a > key_b ? 1 : -1);
+        }
+    });
+
+    return sort_array.map(function(item) {
+        var index = item[1];
+        return items[index];
+    });
+}
+
+function key_alpha(col_index) {
+    return function(elem) {
+        return elem.childNodes[1].childNodes[col_index].firstChild.data.toLowerCase();
+    };
+}
+
+function key_num(col_index) {
+    return function(elem) {
+        return parseFloat(elem.childNodes[1].childNodes[col_index].firstChild.data);
+    };
+}
+
+function key_result(col_index) {
+    return function(elem) {
+        var strings = ['Error', 'Failed', 'Rerun', 'XFailed', 'XPassed',
+                       'Skipped', 'Passed'];
+        return strings.indexOf(elem.childNodes[1].childNodes[col_index].firstChild.data);
+    };
+}
+
+function reset_sort_headers() {
+    find_all('.sort-icon').forEach(function(elem) {
+        elem.parentNode.removeChild(elem);
+    });
+    find_all('.sortable').forEach(function(elem) {
+        var icon = document.createElement("div");
+        icon.className = "sort-icon";
+        icon.textContent = "vvv";
+        elem.insertBefore(icon, elem.firstChild);
+        elem.classList.remove("desc", "active");
+        elem.classList.add("asc", "inactive");
+    });
+}
+
+function toggle_sort_states(elem) {
+    //if active, toggle between asc and desc
+    if (elem.classList.contains('active')) {
+        elem.classList.toggle('asc');
+        elem.classList.toggle('desc');
+    }
+
+    //if inactive, reset all other functions and add ascending active
+    if (elem.classList.contains('inactive')) {
+        reset_sort_headers();
+        elem.classList.remove('inactive');
+        elem.classList.add('active');
+    }
+}
+
+function is_all_rows_hidden(value) {
+  return value.hidden == false;
+}
+
+function filter_table(elem) {
+    var outcome_att = "data-test-result";
+    var outcome = elem.getAttribute(outcome_att);
+    class_outcome = outcome + " results-table-row";
+    var outcome_rows = document.getElementsByClassName(class_outcome);
+
+    for(var i = 0; i < outcome_rows.length; i++){
+        outcome_rows[i].hidden = !elem.checked;
+    }
+
+    var rows = find_all('.results-table-row').filter(is_all_rows_hidden);
+    var all_rows_hidden = rows.length == 0 ? true : false;
+    var not_found_message = document.getElementById("not-found-message");
+    not_found_message.hidden = !all_rows_hidden;
+}
+</script>
+    <h1>report.html</h1>
+    <p>Report generated on 03-Sep-2020 at 13:02:16 by <a href="https://pypi.python.org/pypi/pytest-html">pytest-html</a> v2.1.1</p>
+    <h2>Environment</h2>
+    <table id="environment">
+      <tr>
+        <td>Packages</td>
+        <td>{"pluggy": "0.13.1", "py": "1.9.0", "pytest": "6.0.1"}</td></tr>
+      <tr>
+        <td>Platform</td>
+        <td>Windows-10-10.0.18362-SP0</td></tr>
+      <tr>
+        <td>Plugins</td>
+        <td>{"html": "2.1.1", "metadata": "1.10.0"}</td></tr>
+      <tr>
+        <td>Python</td>
+        <td>3.8.5</td></tr></table>
+    <h2>Summary</h2>
+    <p>2 tests ran in 5.57 seconds. </p>
+    <p class="filter" hidden="true">(Un)check the boxes to filter the results.</p><input checked="true" class="filter" data-test-result="passed" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="passed">2 passed</span>, <input checked="true" class="filter" data-test-result="skipped" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="skipped">0 skipped</span>, <input checked="true" class="filter" data-test-result="failed" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="failed">0 failed</span>, <input checked="true" class="filter" data-test-result="error" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="error">0 errors</span>, <input checked="true" class="filter" data-test-result="xfailed" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="xfailed">0 expected failures</span>, <input checked="true" class="filter" data-test-result="xpassed" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="xpassed">0 unexpected passes</span>
+    <h2>Results</h2>
+    <table id="results-table">
+      <thead id="results-table-head">
+        <tr>
+          <th class="sortable result initial-sort" col="result">Result</th>
+          <th class="sortable" col="name">Test</th>
+          <th class="sortable numeric" col="duration">Duration</th>
+          <th>Links</th></tr>
+        <tr hidden="true" id="not-found-message">
+          <th colspan="4">No results found. Try to check the filters</th></tr></thead>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_uno.py::test_u</td>
+          <td class="col-duration">3.10</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>&lt;Response [200]&gt;
+200
+{&#x27;success&#x27;: True, &#x27;payload&#x27;: {&#x27;success&#x27;: True}}
+&lt;RequestsCookieJar[&lt;Cookie saatchivc=vc_7mcvgl4op for .saatchiart.com/&gt;, &lt;Cookie User-Continent=NA for www.qa.saatchiart.com/&gt;, &lt;Cookie User-Country=US for www.qa.saatchiart.com/&gt;, &lt;Cookie User-Device-OS= for www.qa.saatchiart.com/&gt;, &lt;Cookie User-Region=CA for www.qa.saatchiart.com/&gt;]&gt;
+{&#x27;Content-Type&#x27;: &#x27;application/json; charset=utf-8&#x27;, &#x27;Content-Length&#x27;: &#x27;43&#x27;, &#x27;Server-Timing&#x27;: &#x27;intid;desc=dbdf4c91b66b7272&#x27;, &#x27;X-Powered-By&#x27;: &#x27;Express&#x27;, &#x27;Authenticated-User&#x27;: &#x27;false&#x27;, &#x27;ETag&#x27;: &#x27;W/&quot;2b-h+vfpcuARVNNd+uq1qa9h0ZaWvk&quot;&#x27;, &#x27;Strict-Transport-Security&#x27;: &#x27;max-age=15724800; includeSubDomains&#x27;, &#x27;Date&#x27;: &#x27;Thu, 03 Sep 2020 20:02:16 GMT&#x27;, &#x27;Connection&#x27;: &#x27;keep-alive&#x27;, &#x27;Set-Cookie&#x27;: &#x27;saatchivc=vc_7mcvgl4op; Max-Age=1662235334; Domain=.saatchiart.com; Path=/; Expires=Sun, 07 May 2073 16:04:28 GMT; Secure, User-Continent=NA; path=/, User-Country=US; path=/, User-Region=CA; path=/, User-Device-OS=; path=/&#x27;, &#x27;Content-Security-Policy&#x27;: &quot;default-src https: data: &#x27;unsafe-inline&#x27; &#x27;unsafe-eval&#x27;; child-src https: data: blob:; connect-src https: data: blob:; font-src https: data:; img-src https: data:; media-src blob: data: https:; object-src https:; script-src https: data: blob: &#x27;unsafe-inline&#x27; &#x27;unsafe-eval&#x27;; style-src https: &#x27;unsafe-inline&#x27;; block-all-mixed-content; upgrade-insecure-requests;&quot;, &#x27;X-XSS-Protection&#x27;: &#x27;1; mode=block&#x27;, &#x27;X-Content-Type-Options&#x27;: &#x27;nosniff&#x27;}
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">test_uno.py::test_two</td>
+          <td class="col-duration">2.24</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>&lt;Response [200]&gt;
+200
+{&#x27;success&#x27;: True, &#x27;payload&#x27;: {&#x27;artwork&#x27;: {&#x27;additionalImages&#x27;: [{&#x27;imageUrl&#x27;: &#x27;https://images.qa.saatchiart.com/saatchi/413499/art/6858357/additional_3ebd9661b823111da398ac3d8928515deaf6e6c4-7.jpg&#x27;, &#x27;description&#x27;: &#x27;Detail&#x27;, &#x27;width&#x27;: 770, &#x27;height&#x27;: 519, &#x27;thumbnailUrl&#x27;: &#x27;https://images.qa.saatchiart.com/saatchi/413499/art/6858357/additional_3ebd9661b823111da398ac3d8928515deaf6e6c4-22.jpg&#x27;}, {&#x27;imageUrl&#x27;: &#x27;https://images.qa.saatchiart.com/saatchi/413499/art/6858357/additional_02411715384c4074b19dbf125087eb7905c5f0b1-7.jpg&#x27;, &#x27;description&#x27;: &#x27;Detail&#x27;, &#x27;width&#x27;: 770, &#x27;height&#x27;: 556, &#x27;thumbnailUrl&#x27;: &#x27;https://images.qa.saatchiart.com/saatchi/413499/art/6858357/additional_02411715384c4074b19dbf125087eb7905c5f0b1-22.jpg&#x27;}, {&#x27;imageUrl&#x27;: &#x27;https://images.qa.saatchiart.com/saatchi/413499/art/6858357/additional_3bf6fb4e54e3cc51b38d672aa4e802159a25fd01-7.jpg&#x27;, &#x27;description&#x27;: &#x27;Detail&#x27;, &#x27;width&#x27;: 770, &#x27;height&#x27;: 569, &#x27;thumbnailUrl&#x27;: &#x27;https://images.qa.saatchiart.com/saatchi/413499/art/6858357/additional_3bf6fb4e54e3cc51b38d672aa4e802159a25fd01-22.jpg&#x27;}, {&#x27;imageUrl&#x27;: &#x27;https://images.qa.saatchiart.com/saatchi/413499/art/6858357/additional_a4c8bdff98ad8e15f2b660ada4c3b5497ce971b5-7.jpg&#x27;, &#x27;description&#x27;: &#x27;Gallery Editions sold ready to frame&#x27;, &#x27;width&#x27;: 770, &#x27;height&#x27;: 462, &#x27;thumbnailUrl&#x27;: &#x27;https://images.qa.saatchiart.com/saatchi/413499/art/6858357/additional_a4c8bdff98ad8e15f2b660ada4c3b5497ce971b5-22.jpg&#x27;}], &#x27;artworkId&#x27;: &#x27;6858357&#x27;, &#x27;artworkImage&#x27;: {&#x27;imageUrl&#x27;: &#x27;https://images.qa.saatchiart.com/saatchi/413499/art/6858357/5927711-JNYXSAXQ-7.jpg&#x27;, &#x27;description&#x27;: &#x27;&#x27;, &#x27;width&#x27;: 770, &#x27;height&#x27;: 770, &#x27;thumbnailUrl&#x27;: &#x27;https://images.qa.saatchiart.com/saatchi/413499/art/6858357/5927711-JNYXSAXQ-22.jpg&#x27;, &#x27;fullscreenUrl&#x27;: &#x27;https://images.qa.saatchiart.com/saatchi/413499/art/6858357/5927711-JNYXSAXQ-7.jpg&#x27;, &#x27;crops&#x27;: {&#x27;square&#x27;: {&#x27;x&#x27;: 0, &#x27;y&#x27;: 0, &#x27;width&#x27;: 770, &#x27;height&#x27;: 770}, &#x27;scale&#x27;: {&#x27;x&#x27;: 0, &#x27;y&#x27;: 128, &#x27;width&#x27;: 770, &#x27;height&#x27;: 513}, &#x27;print&#x27;: {&#x27;x&#x27;: 0, &#x27;y&#x27;: 0, &#x27;width&#x27;: 2638, &#x27;height&#x27;: 2638}, &#x27;scaled-print&#x27;: {&#x27;x&#x27;: 0, &#x27;y&#x27;: 0, &#x27;width&#x27;: 2048, &#x27;height&#x27;: 2048}, &#x27;studio-print&#x27;: {&#x27;x&#x27;: 0, &#x27;y&#x27;: 0, &#x27;width&#x27;: 2048, &#x27;height&#x27;: 2048}}}, &#x27;category&#x27;: &#x27;New Media&#x27;, &#x27;depth&#x27;: &#x27;0.25&#x27;, &#x27;description&#x27;: &quot;Space Face (White) - Gallery Edition\n\nThis artwork is part of the Bowie Bauhaus Series including a large collection of fabric and homeware designs.\n\nBauhaus, Cubist and Art Deco inspired Art: Graphic Abstract Geometric Composition.\n\nPart of the Space Shapes Series. These images work well in any modern room setting, effective when grouped together as a set or just as effective when used as single images set off against simple gallery-style frames.\n\nThese Gallery Editions are hand-signed by the artist personally (on the front) and include a unique Certificate of Authenticity.\n\n• Type: Fine-Art Print\n• Medium: Giclée\n• Materials: 100% Cotton\n• Paper Type: Hahnemühle German Etching\n• Paper Size: Approx 26x23 inches\n• Image size: 20x20 inch (approx)\n• Gallery Edition of only 10\n• This artwork is sold unframed\n• Includes Certificate of Authenticity\n\nArtwork will be shipped rolled in a secure tube.\n\nNB. Stewart works as &#x27;The Emperor&#x27;s New Clothes Collective&#x27; under various artist alter-egos including Jack Smith, Hertz Van Wental and Baxter Cane - Alternative Abstract Collection available on Saatchi Art:\n\nhttps://www.saatchiart.com/jacksmith\n\nCzar Catstick - included in the Saatchi &#x27;Art We Love&#x27; Blog (A Few Painting Techniques Artists Use)\n\nMore info: C-ZAR.com&quot;, &#x27;displayResaleLink&#x27;: False, &#x27;hasLimitedEditions&#x27;: False, &#x27;hasOpenEditions&#x27;: True, &#x27;hasOriginal&#x27;: True, &#x27;height&#x27;: &#x27;67.31&#x27;, &#x27;isDeleted&#x27;: False, &#x27;isLegacyArtwork&#x27;: True, &#x27;keywords&#x27;: [&#x27;stardust&#x27;, &#x27;strong&#x27;, &#x27;bold&#x27;, &#x27;bauhaus&#x27;, &#x27;david&#x27;, &#x27;bowie&#x27;, &#x27;colors&#x27;, &#x27;ziggy&#x27;, &#x27;abstract&#x27;, &#x27;Blackstar&#x27;], &#x27;legacyUserArtId&#x27;: 6858357, &#x27;likes&#x27;: 1, &#x27;materials&#x27;: [&#x27;Paper&#x27;], &#x27;mediums&#x27;: [&#x27;Vector&#x27;, &#x27;Digital&#x27;, &#x27;New Media&#x27;, &#x27;Fabric&#x27;, &#x27;Manipulated&#x27;], &#x27;products&#x27;: [{&#x27;depth&#x27;: &#x27;0.25&#x27;, &#x27;height&#x27;: &#x27;67.31&#x27;, &#x27;id&#x27;: 1, &#x27;isAple&#x27;: True, &#x27;isAvailableForSale&#x27;: True, &#x27;isLimitedEdition&#x27;: False, &#x27;isOpenEdition&#x27;: False, &#x27;isOriginal&#x27;: True, &#x27;isReserved&#x27;: False, &#x27;isSoldOut&#x27;: False, &#x27;legacySku&#x27;: &#x27;P1-U413499-A6858357&#x27;, &#x27;material&#x27;: &#x27;&#x27;, &#x27;options&#x27;: [], &#x27;price&#x27;: 71000, &#x27;sku&#x27;: &#x27;P1-U413499-A6858357-T1&#x27;, &#x27;unitsProduced&#x27;: 10, &#x27;width&#x27;: &#x27;59.44&#x27;, &#x27;original&#x27;: {&#x27;packagingOption&#x27;: &#x27;rolled&#x27;, &#x27;isReadyToHang&#x27;: False, &#x27;hasFrame&#x27;: False, &#x27;frameColor&#x27;: &#x27;&#x27;, &#x27;shippingDimensions&#x27;: {&#x27;depth&#x27;: 13, &#x27;weight&#x27;: 3.18, &#x27;height&#x27;: 13, &#x27;width&#x27;: 69.44}}}, {&#x27;depth&#x27;: &#x27;0.1&#x27;, &#x27;height&#x27;: &#x27;10&#x27;, &#x27;id&#x27;: 212, &#x27;isAple&#x27;: False, &#x27;isAvailableForSale&#x27;: True, &#x27;isLimitedEdition&#x27;: False, &#x27;isOpenEdition&#x27;: True, &#x27;isOriginal&#x27;: False, &#x27;isReserved&#x27;: False, &#x27;isSoldOut&#x27;: False, &#x27;legacySku&#x27;: &#x27;P212-U413499-A6858357&#x27;, &#x27;material&#x27;: &#x27;Fine Art Paper&#x27;, &#x27;options&#x27;: [{&#x27;id&#x27;: &#x27;F113&#x27;, &#x27;framingTypeId&#x27;: 9, &#x27;extendedDescription&#x27;: &#x27;Solid wood frame in black color|Milled from FSC-certified and responsibly harvested solid wood|Cut-to-order, hand-made frame|Sleek box profile, .75&quot; wide and 1.25&quot; tall|Bright white mat border|Thick .098&quot; framing-grade clear acrylic|Mounted on acid-free foam board|Arrives ready to hang with installed hardware&#x27;, &#x27;title&#x27;: &#x27;Black&#x27;, &#x27;description&#x27;: &#x27;10x10 Single Mat with 14x14 Acrylic&#x27;, &#x27;price&#x27;: 8000, &#x27;width&#x27;: &#x27;10&#x27;, &#x27;height&#x27;: &#x27;10&#x27;}, {&#x27;id&#x27;: &#x27;F114&#x27;, &#x27;framingTypeId&#x27;: 10, &#x27;extendedDescription&#x27;: &#x27;Solid wood frame in white color|Milled from FSC-certified and responsibly harvested solid wood|Cut-to-order, hand-made frame|Sleek box profile, .75&quot; wide and 1.25&quot; tall|Bright white mat border|Thick .098&quot; framing-grade clear acrylic|Mounted on acid-free foam board|Arrives ready to hang with installed hardware&#x27;, &#x27;title&#x27;: &#x27;White&#x27;, &#x27;description&#x27;: &#x27;10x10 Single Mat with 14x14 Acrylic&#x27;, &#x27;price&#x27;: 8000, &#x27;width&#x27;: &#x27;10&#x27;, &#x27;height&#x27;: &#x27;10&#x27;}, {&#x27;id&#x27;: &#x27;F115&#x27;, &#x27;framingTypeId&#x27;: 11, &#x27;extendedDescription&#x27;: &#x27;Solid wood frame in natural color|Milled from FSC-certified and responsibly harvested solid wood|Cut-to-order, hand-made frame|Sleek box profile, .75&quot; wide and 1.25&quot; tall|Bright white mat border|Thick .098&quot; framing-grade clear acrylic|Mounted on acid-free foam board|Arrives ready to hang with installed hardware&#x27;, &#x27;title&#x27;: &#x27;Natural Wood&#x27;, &#x27;description&#x27;: &#x27;10x10 Single Mat with 14x14 Acrylic&#x27;, &#x27;price&#x27;: 8000, &#x27;width&#x27;: &#x27;10&#x27;, &#x27;height&#x27;: &#x27;10&#x27;}], &#x27;price&#x27;: 7000, &#x27;sku&#x27;: &#x27;P212-U413499-A6858357-T2&#x27;, &#x27;unitsProduced&#x27;: 9999, &#x27;width&#x27;: &#x27;10&#x27;, &#x27;print&#x27;: {&#x27;recommended_option_id&#x27;: None}}, {&#x27;depth&#x27;: &#x27;0.1&#x27;, &#x27;height&#x27;: &#x27;16&#x27;, &#x27;id&#x27;: 220, &#x27;isAple&#x27;: False, &#x27;isAvailableForSale&#x27;: True, &#x27;isLimitedEdition&#x27;: False, &#x27;isOpenEdition&#x27;: True, &#x27;isOriginal&#x27;: False, &#x27;isReserved&#x27;: False, &#x27;isSoldOut&#x27;: False, &#x27;legacySku&#x27;: &#x27;P220-U413499-A6858357&#x27;, &#x27;material&#x27;: &#x27;Fine Art Paper&#x27;, &#x27;options&#x27;: [{&#x27;id&#x27;: &#x27;F137&#x27;, &#x27;framingTypeId&#x27;: 9, &#x27;extendedDescription&#x27;: &#x27;Solid wood frame in black color|Milled from FSC-certified and responsibly harvested solid wood|Cut-to-order, hand-made frame|Sleek box profile, .75&quot; wide and 1.25&quot; tall|Bright white mat border|Thick .098&quot; framing-grade clear acrylic|Mounted on acid-free foam board|Arrives ready to hang with installed hardware&#x27;, &#x27;title&#x27;: &#x27;Black&#x27;, &#x27;description&#x27;: &#x27;16x16 Single Mat with 20x20 Acrylic&#x27;, &#x27;price&#x27;: 12000, &#x27;width&#x27;: &#x27;16&#x27;, &#x27;height&#x27;: &#x27;16&#x27;}, {&#x27;id&#x27;: &#x27;F138&#x27;, &#x27;framingTypeId&#x27;: 10, &#x27;extendedDescription&#x27;: &#x27;Solid wood frame in white color|Milled from FSC-certified and responsibly harvested solid wood|Cut-to-order, hand-made frame|Sleek box profile, .75&quot; wide and 1.25&quot; tall|Bright white mat border|Thick .098&quot; framing-grade clear acrylic|Mounted on acid-free foam board|Arrives ready to hang with installed hardware&#x27;, &#x27;title&#x27;: &#x27;White&#x27;, &#x27;description&#x27;: &#x27;16x16 Single Mat with 20x20 Acrylic&#x27;, &#x27;price&#x27;: 12000, &#x27;width&#x27;: &#x27;16&#x27;, &#x27;height&#x27;: &#x27;16&#x27;}, {&#x27;id&#x27;: &#x27;F139&#x27;, &#x27;framingTypeId&#x27;: 11, &#x27;extendedDescription&#x27;: &#x27;Solid wood frame in natural color|Milled from FSC-certified and responsibly harvested solid wood|Cut-to-order, hand-made frame|Sleek box profile, .75&quot; wide and 1.25&quot; tall|Bright white mat border|Thick .098&quot; framing-grade clear acrylic|Mounted on acid-free foam board|Arrives ready to hang with installed hardware&#x27;, &#x27;title&#x27;: &#x27;Natural Wood&#x27;, &#x27;description&#x27;: &#x27;16x16 Single Mat with 20x20 Acrylic&#x27;, &#x27;price&#x27;: 12000, &#x27;width&#x27;: &#x27;16&#x27;, &#x27;height&#x27;: &#x27;16&#x27;}], &#x27;price&#x27;: 10500, &#x27;sku&#x27;: &#x27;P220-U413499-A6858357-T2&#x27;, &#x27;unitsProduced&#x27;: 9999, &#x27;width&#x27;: &#x27;16&#x27;, &#x27;print&#x27;: {&#x27;recommended_option_id&#x27;: None}}, {&#x27;depth&#x27;: &#x27;0.1&#x27;, &#x27;height&#x27;: &#x27;24&#x27;, &#x27;id&#x27;: 228, &#x27;isAple&#x27;: False, &#x27;isAvailableForSale&#x27;: True, &#x27;isLimitedEdition&#x27;: False, &#x27;isOpenEdition&#x27;: True, &#x27;isOriginal&#x27;: False, &#x27;isReserved&#x27;: False, &#x27;isSoldOut&#x27;: False, &#x27;legacySku&#x27;: &#x27;P228-U413499-A6858357&#x27;, &#x27;material&#x27;: &#x27;Fine Art Paper&#x27;, &#x27;options&#x27;: [{&#x27;id&#x27;: &#x27;F161&#x27;, &#x27;framingTypeId&#x27;: 9, &#x27;extendedDescription&#x27;: &#x27;Solid wood frame in black color|Milled from FSC-certified and responsibly harvested solid wood|Cut-to-order, hand-made frame|Sleek box profile, .75&quot; wide and 1.25&quot; tall|Bright white mat border|Thick .098&quot; framing-grade clear acrylic|Mounted on acid-free foam board|Arrives ready to hang with installed hardware&#x27;, &#x27;title&#x27;: &#x27;Black&#x27;, &#x27;description&#x27;: &#x27;&#x27;, &#x27;price&#x27;: 16000, &#x27;width&#x27;: &#x27;24&#x27;, &#x27;height&#x27;: &#x27;24&#x27;}, {&#x27;id&#x27;: &#x27;F162&#x27;, &#x27;framingTypeId&#x27;: 10, &#x27;extendedDescription&#x27;: &#x27;Solid wood frame in white color|Milled from FSC-certified and responsibly harvested solid wood|Cut-to-order, hand-made frame|Sleek box profile, .75&quot; wide and 1.25&quot; tall|Bright white mat border|Thick .098&quot; framing-grade clear acrylic|Mounted on acid-free foam board|Arrives ready to hang with installed hardware&#x27;, &#x27;title&#x27;: &#x27;White&#x27;, &#x27;description&#x27;: &#x27;&#x27;, &#x27;price&#x27;: 16000, &#x27;width&#x27;: &#x27;24&#x27;, &#x27;height&#x27;: &#x27;24&#x27;}, {&#x27;id&#x27;: &#x27;F163&#x27;, &#x27;framingTypeId&#x27;: 11, &#x27;extendedDescription&#x27;: &#x27;Solid wood frame in natural color|Milled from FSC-certified and responsibly harvested solid wood|Cut-to-order, hand-made frame|Sleek box profile, .75&quot; wide and 1.25&quot; tall|Bright white mat border|Thick .098&quot; framing-grade clear acrylic|Mounted on acid-free foam board|Arrives ready to hang with installed hardware&#x27;, &#x27;title&#x27;: &#x27;Natural Wood&#x27;, &#x27;description&#x27;: &#x27;&#x27;, &#x27;price&#x27;: 16000, &#x27;width&#x27;: &#x27;24&#x27;, &#x27;height&#x27;: &#x27;24&#x27;}], &#x27;price&#x27;: 18000, &#x27;sku&#x27;: &#x27;P228-U413499-A6858357-T2&#x27;, &#x27;unitsProduced&#x27;: 9999, &#x27;width&#x27;: &#x27;24&#x27;, &#x27;print&#x27;: {&#x27;recommended_option_id&#x27;: None}}, {&#x27;depth&#x27;: &#x27;0.1&#x27;, &#x27;height&#x27;: &#x27;34&#x27;, &#x27;id&#x27;: 240, &#x27;isAple&#x27;: False, &#x27;isAvailableForSale&#x27;: True, &#x27;isLimitedEdition&#x27;: False, &#x27;isOpenEdition&#x27;: True, &#x27;isOriginal&#x27;: False, &#x27;isReserved&#x27;: False, &#x27;isSoldOut&#x27;: False, &#x27;legacySku&#x27;: &#x27;P240-U413499-A6858357&#x27;, &#x27;material&#x27;: &#x27;Fine Art Paper&#x27;, &#x27;options&#x27;: [{&#x27;id&#x27;: &#x27;F197&#x27;, &#x27;framingTypeId&#x27;: 9, &#x27;extendedDescription&#x27;: &#x27;Solid wood frame in black color|Milled from FSC-certified and responsibly harvested solid wood|Cut-to-order, hand-made frame|Sleek box profile, .75&quot; wide and 1.25&quot; tall|Bright white mat border|Thick .098&quot; framing-grade clear acrylic|Mounted on acid-free foam board|Arrives ready to hang with installed hardware&#x27;, &#x27;title&#x27;: &#x27;Black&#x27;, &#x27;description&#x27;: &#x27;&#x27;, &#x27;price&#x27;: 20000, &#x27;width&#x27;: &#x27;34&#x27;, &#x27;height&#x27;: &#x27;34&#x27;}, {&#x27;id&#x27;: &#x27;F198&#x27;, &#x27;framingTypeId&#x27;: 10, &#x27;extendedDescription&#x27;: &#x27;Solid wood frame in white color|Milled from FSC-certified and responsibly harvested solid wood|Cut-to-order, hand-made frame|Sleek box profile, .75&quot; wide and 1.25&quot; tall|Bright white mat border|Thick .098&quot; framing-grade clear acrylic|Mounted on acid-free foam board|Arrives ready to hang with installed hardware&#x27;, &#x27;title&#x27;: &#x27;White&#x27;, &#x27;description&#x27;: &#x27;&#x27;, &#x27;price&#x27;: 20000, &#x27;width&#x27;: &#x27;34&#x27;, &#x27;height&#x27;: &#x27;34&#x27;}, {&#x27;id&#x27;: &#x27;F199&#x27;, &#x27;framingTypeId&#x27;: 11, &#x27;extendedDescription&#x27;: &#x27;Solid wood frame in natural color|Milled from FSC-certified and responsibly harvested solid wood|Cut-to-order, hand-made frame|Sleek box profile, .75&quot; wide and 1.25&quot; tall|Bright white mat border|Thick .098&quot; framing-grade clear acrylic|Mounted on acid-free foam board|Arrives ready to hang with installed hardware&#x27;, &#x27;title&#x27;: &#x27;Natural Wood&#x27;, &#x27;description&#x27;: &#x27;&#x27;, &#x27;price&#x27;: 20000, &#x27;width&#x27;: &#x27;34&#x27;, &#x27;height&#x27;: &#x27;34&#x27;}], &#x27;price&#x27;: 30000, &#x27;sku&#x27;: &#x27;P240-U413499-A6858357-T2&#x27;, &#x27;unitsProduced&#x27;: 9999, &#x27;width&#x27;: &#x27;34&#x27;, &#x27;print&#x27;: {&#x27;recommended_option_id&#x27;: None}}, {&#x27;depth&#x27;: &#x27;0.1&#x27;, &#x27;height&#x27;: &#x27;10&#x27;, &#x27;id&#x27;: 213, &#x27;isAple&#x27;: False, &#x27;isAvailableForSale&#x27;: True, &#x27;isLimitedEdition&#x27;: False, &#x27;isOpenEdition&#x27;: True, &#x27;isOriginal&#x27;: False, &#x27;isReserved&#x27;: False, &#x27;isSoldOut&#x27;: False, &#x27;legacySku&#x27;: &#x27;P213-U413499-A6858357&#x27;, &#x27;material&#x27;: &#x27;Photo Paper&#x27;, &#x27;options&#x27;: [{&#x27;id&#x27;: &#x27;F113&#x27;, &#x27;framingTypeId&#x27;: 9, &#x27;extendedDescription&#x27;: &#x27;Solid wood frame in black color|Milled from FSC-certified and responsibly harvested solid wood|Cut-to-order, hand-made frame|Sleek box profile, .75&quot; wide and 1.25&quot; tall|Bright white mat border|Thick .098&quot; framing-grade clear acrylic|Mounted on acid-free foam board|Arrives ready to hang with installed hardware&#x27;, &#x27;title&#x27;: &#x27;Black&#x27;, &#x27;description&#x27;: &#x27;10x10 Single Mat with 14x14 Acrylic&#x27;, &#x27;price&#x27;: 8000, &#x27;width&#x27;: &#x27;10&#x27;, &#x27;height&#x27;: &#x27;10&#x27;}, {&#x27;id&#x27;: &#x27;F114&#x27;, &#x27;framingTypeId&#x27;: 10, &#x27;extendedDescription&#x27;: &#x27;Solid wood frame in white color|Milled from FSC-certified and responsibly harvested solid wood|Cut-to-order, hand-made frame|Sleek box profile, .75&quot; wide and 1.25&quot; tall|Bright white mat border|Thick .098&quot; framing-grade clear acrylic|Mounted on acid-free foam board|Arrives ready to hang with installed hardware&#x27;, &#x27;title&#x27;: &#x27;White&#x27;, &#x27;description&#x27;: &#x27;10x10 Single Mat with 14x14 Acrylic&#x27;, &#x27;price&#x27;: 8000, &#x27;width&#x27;: &#x27;10&#x27;, &#x27;height&#x27;: &#x27;10&#x27;}, {&#x27;id&#x27;: &#x27;F115&#x27;, &#x27;framingTypeId&#x27;: 11, &#x27;extendedDescription&#x27;: &#x27;Solid wood frame in natural color|Milled from FSC-certified and responsibly harvested solid wood|Cut-to-order, hand-made frame|Sleek box profile, .75&quot; wide and 1.25&quot; tall|Bright white mat border|Thick .098&quot; framing-grade clear acrylic|Mounted on acid-free foam board|Arrives ready to hang with installed hardware&#x27;, &#x27;title&#x27;: &#x27;Natural Wood&#x27;, &#x27;description&#x27;: &#x27;10x10 Single Mat with 14x14 Acrylic&#x27;, &#x27;price&#x27;: 8000, &#x27;width&#x27;: &#x27;10&#x27;, &#x27;height&#x27;: &#x27;10&#x27;}], &#x27;price&#x27;: 7000, &#x27;sku&#x27;: &#x27;P213-U413499-A6858357-T2&#x27;, &#x27;unitsProduced&#x27;: 9999, &#x27;width&#x27;: &#x27;10&#x27;, &#x27;print&#x27;: {&#x27;recommended_option_id&#x27;: None}}, {&#x27;depth&#x27;: &#x27;0.1&#x27;, &#x27;height&#x27;: &#x27;16&#x27;, &#x27;id&#x27;: 221, &#x27;isAple&#x27;: False, &#x27;isAvailableForSale&#x27;: True, &#x27;isLimitedEdition&#x27;: False, &#x27;isOpenEdition&#x27;: True, &#x27;isOriginal&#x27;: False, &#x27;isReserved&#x27;: False, &#x27;isSoldOut&#x27;: False, &#x27;legacySku&#x27;: &#x27;P221-U413499-A6858357&#x27;, &#x27;material&#x27;: &#x27;Photo Paper&#x27;, &#x27;options&#x27;: [{&#x27;id&#x27;: &#x27;F137&#x27;, &#x27;framingTypeId&#x27;: 9, &#x27;extendedDescription&#x27;: &#x27;Solid wood frame in black color|Milled from FSC-certified and responsibly harvested solid wood|Cut-to-order, hand-made frame|Sleek box profile, .75&quot; wide and 1.25&quot; tall|Bright white mat border|Thick .098&quot; framing-grade clear acrylic|Mounted on acid-free foam board|Arrives ready to hang with installed hardware&#x27;, &#x27;title&#x27;: &#x27;Black&#x27;, &#x27;description&#x27;: &#x27;16x16 Single Mat with 20x20 Acrylic&#x27;, &#x27;price&#x27;: 12000, &#x27;width&#x27;: &#x27;16&#x27;, &#x27;height&#x27;: &#x27;16&#x27;}, {&#x27;id&#x27;: &#x27;F138&#x27;, &#x27;framingTypeId&#x27;: 10, &#x27;extendedDescription&#x27;: &#x27;Solid wood frame in white color|Milled from FSC-certified and responsibly harvested solid wood|Cut-to-order, hand-made frame|Sleek box profile, .75&quot; wide and 1.25&quot; tall|Bright white mat border|Thick .098&quot; framing-grade clear acrylic|Mounted on acid-free foam board|Arrives ready to hang with installed hardware&#x27;, &#x27;title&#x27;: &#x27;White&#x27;, &#x27;description&#x27;: &#x27;16x16 Single Mat with 20x20 Acrylic&#x27;, &#x27;price&#x27;: 12000, &#x27;width&#x27;: &#x27;16&#x27;, &#x27;height&#x27;: &#x27;16&#x27;}, {&#x27;id&#x27;: &#x27;F139&#x27;, &#x27;framingTypeId&#x27;: 11, &#x27;extendedDescription&#x27;: &#x27;Solid wood frame in natural color|Milled from FSC-certified and responsibly harvested solid wood|Cut-to-order, hand-made frame|Sleek box profile, .75&quot; wide and 1.25&quot; tall|Bright white mat border|Thick .098&quot; framing-grade clear acrylic|Mounted on acid-free foam board|Arrives ready to hang with installed hardware&#x27;, &#x27;title&#x27;: &#x27;Natural Wood&#x27;, &#x27;description&#x27;: &#x27;16x16 Single Mat with 20x20 Acrylic&#x27;, &#x27;price&#x27;: 12000, &#x27;width&#x27;: &#x27;16&#x27;, &#x27;height&#x27;: &#x27;16&#x27;}], &#x27;price&#x27;: 10500, &#x27;sku&#x27;: &#x27;P221-U413499-A6858357-T2&#x27;, &#x27;unitsProduced&#x27;: 9999, &#x27;width&#x27;: &#x27;16&#x27;, &#x27;print&#x27;: {&#x27;recommended_option_id&#x27;: None}}, {&#x27;depth&#x27;: &#x27;0.1&#x27;, &#x27;height&#x27;: &#x27;24&#x27;, &#x27;id&#x27;: 229, &#x27;isAple&#x27;: False, &#x27;isAvailableForSale&#x27;: True, &#x27;isLimitedEdition&#x27;: False, &#x27;isOpenEdition&#x27;: True, &#x27;isOriginal&#x27;: False, &#x27;isReserved&#x27;: False, &#x27;isSoldOut&#x27;: False, &#x27;legacySku&#x27;: &#x27;P229-U413499-A6858357&#x27;, &#x27;material&#x27;: &#x27;Photo Paper&#x27;, &#x27;options&#x27;: [{&#x27;id&#x27;: &#x27;F161&#x27;, &#x27;framingTypeId&#x27;: 9, &#x27;extendedDescription&#x27;: &#x27;Solid wood frame in black color|Milled from FSC-certified and responsibly harvested solid wood|Cut-to-order, hand-made frame|Sleek box profile, .75&quot; wide and 1.25&quot; tall|Bright white mat border|Thick .098&quot; framing-grade clear acrylic|Mounted on acid-free foam board|Arrives ready to hang with installed hardware&#x27;, &#x27;title&#x27;: &#x27;Black&#x27;, &#x27;description&#x27;: &#x27;&#x27;, &#x27;price&#x27;: 16000, &#x27;width&#x27;: &#x27;24&#x27;, &#x27;height&#x27;: &#x27;24&#x27;}, {&#x27;id&#x27;: &#x27;F162&#x27;, &#x27;framingTypeId&#x27;: 10, &#x27;extendedDescription&#x27;: &#x27;Solid wood frame in white color|Milled from FSC-certified and responsibly harvested solid wood|Cut-to-order, hand-made frame|Sleek box profile, .75&quot; wide and 1.25&quot; tall|Bright white mat border|Thick .098&quot; framing-grade clear acrylic|Mounted on acid-free foam board|Arrives ready to hang with installed hardware&#x27;, &#x27;title&#x27;: &#x27;White&#x27;, &#x27;description&#x27;: &#x27;&#x27;, &#x27;price&#x27;: 16000, &#x27;width&#x27;: &#x27;24&#x27;, &#x27;height&#x27;: &#x27;24&#x27;}, {&#x27;id&#x27;: &#x27;F163&#x27;, &#x27;framingTypeId&#x27;: 11, &#x27;extendedDescription&#x27;: &#x27;Solid wood frame in natural color|Milled from FSC-certified and responsibly harvested solid wood|Cut-to-order, hand-made frame|Sleek box profile, .75&quot; wide and 1.25&quot; tall|Bright white mat border|Thick .098&quot; framing-grade clear acrylic|Mounted on acid-free foam board|Arrives ready to hang with installed hardware&#x27;, &#x27;title&#x27;: &#x27;Natural Wood&#x27;, &#x27;description&#x27;: &#x27;&#x27;, &#x27;price&#x27;: 16000, &#x27;width&#x27;: &#x27;24&#x27;, &#x27;height&#x27;: &#x27;24&#x27;}], &#x27;price&#x27;: 18000, &#x27;sku&#x27;: &#x27;P229-U413499-A6858357-T2&#x27;, &#x27;unitsProduced&#x27;: 9999, &#x27;width&#x27;: &#x27;24&#x27;, &#x27;print&#x27;: {&#x27;recommended_option_id&#x27;: None}}, {&#x27;depth&#x27;: &#x27;0.1&#x27;, &#x27;height&#x27;: &#x27;34&#x27;, &#x27;id&#x27;: 241, &#x27;isAple&#x27;: False, &#x27;isAvailableForSale&#x27;: True, &#x27;isLimitedEdition&#x27;: False, &#x27;isOpenEdition&#x27;: True, &#x27;isOriginal&#x27;: False, &#x27;isReserved&#x27;: False, &#x27;isSoldOut&#x27;: False, &#x27;legacySku&#x27;: &#x27;P241-U413499-A6858357&#x27;, &#x27;material&#x27;: &#x27;Photo Paper&#x27;, &#x27;options&#x27;: [{&#x27;id&#x27;: &#x27;F197&#x27;, &#x27;framingTypeId&#x27;: 9, &#x27;extendedDescription&#x27;: &#x27;Solid wood frame in black color|Milled from FSC-certified and responsibly harvested solid wood|Cut-to-order, hand-made frame|Sleek box profile, .75&quot; wide and 1.25&quot; tall|Bright white mat border|Thick .098&quot; framing-grade clear acrylic|Mounted on acid-free foam board|Arrives ready to hang with installed hardware&#x27;, &#x27;title&#x27;: &#x27;Black&#x27;, &#x27;description&#x27;: &#x27;&#x27;, &#x27;price&#x27;: 20000, &#x27;width&#x27;: &#x27;34&#x27;, &#x27;height&#x27;: &#x27;34&#x27;}, {&#x27;id&#x27;: &#x27;F198&#x27;, &#x27;framingTypeId&#x27;: 10, &#x27;extendedDescription&#x27;: &#x27;Solid wood frame in white color|Milled from FSC-certified and responsibly harvested solid wood|Cut-to-order, hand-made frame|Sleek box profile, .75&quot; wide and 1.25&quot; tall|Bright white mat border|Thick .098&quot; framing-grade clear acrylic|Mounted on acid-free foam board|Arrives ready to hang with installed hardware&#x27;, &#x27;title&#x27;: &#x27;White&#x27;, &#x27;description&#x27;: &#x27;&#x27;, &#x27;price&#x27;: 20000, &#x27;width&#x27;: &#x27;34&#x27;, &#x27;height&#x27;: &#x27;34&#x27;}, {&#x27;id&#x27;: &#x27;F199&#x27;, &#x27;framingTypeId&#x27;: 11, &#x27;extendedDescription&#x27;: &#x27;Solid wood frame in natural color|Milled from FSC-certified and responsibly harvested solid wood|Cut-to-order, hand-made frame|Sleek box profile, .75&quot; wide and 1.25&quot; tall|Bright white mat border|Thick .098&quot; framing-grade clear acrylic|Mounted on acid-free foam board|Arrives ready to hang with installed hardware&#x27;, &#x27;title&#x27;: &#x27;Natural Wood&#x27;, &#x27;description&#x27;: &#x27;&#x27;, &#x27;price&#x27;: 20000, &#x27;width&#x27;: &#x27;34&#x27;, &#x27;height&#x27;: &#x27;34&#x27;}], &#x27;price&#x27;: 30000, &#x27;sku&#x27;: &#x27;P241-U413499-A6858357-T2&#x27;, &#x27;unitsProduced&#x27;: 9999, &#x27;width&#x27;: &#x27;34&#x27;, &#x27;print&#x27;: {&#x27;recommended_option_id&#x27;: None}}, {&#x27;depth&#x27;: &#x27;0.1&#x27;, &#x27;height&#x27;: &#x27;16&#x27;, &#x27;id&#x27;: 178, &#x27;isAple&#x27;: False, &#x27;isAvailableForSale&#x27;: True, &#x27;isLimitedEdition&#x27;: False, &#x27;isOpenEdition&#x27;: True, &#x27;isOriginal&#x27;: False, &#x27;isReserved&#x27;: False, &#x27;isSoldOut&#x27;: False, &#x27;legacySku&#x27;: &#x27;P178-U413499-A6858357&#x27;, &#x27;material&#x27;: &#x27;Canvas&#x27;, &#x27;options&#x27;: [{&#x27;id&#x27;: &#x27;W38&#x27;, &#x27;framingTypeId&#x27;: 0, &#x27;extendedDescription&#x27;: &#x27;&#x27;, &#x27;title&#x27;: &#x27;White Canvas&#x27;, &#x27;description&#x27;: &#x27;Sides of canvas are white&#x27;, &#x27;price&#x27;: 0, &#x27;width&#x27;: &#x27;0&#x27;, &#x27;height&#x27;: &#x27;0&#x27;}, {&#x27;id&#x27;: &#x27;W39&#x27;, &#x27;framingTypeId&#x27;: 0, &#x27;extendedDescription&#x27;: &#x27;&#x27;, &#x27;title&#x27;: &#x27;Black Canvas&#x27;, &#x27;description&#x27;: &#x27;Sides of canvas are black&#x27;, &#x27;price&#x27;: 0, &#x27;width&#x27;: &#x27;0&#x27;, &#x27;height&#x27;: &#x27;0&#x27;}], &#x27;price&#x27;: 18800, &#x27;sku&#x27;: &#x27;P178-U413499-A6858357-T2&#x27;, &#x27;unitsProduced&#x27;: 9999, &#x27;width&#x27;: &#x27;16&#x27;, &#x27;print&#x27;: {&#x27;recommended_option_id&#x27;: &#x27;W38&#x27;}}, {&#x27;depth&#x27;: &#x27;0.1&#x27;, &#x27;height&#x27;: &#x27;24&#x27;, &#x27;id&#x27;: 180, &#x27;isAple&#x27;: False, &#x27;isAvailableForSale&#x27;: True, &#x27;isLimitedEdition&#x27;: False, &#x27;isOpenEdition&#x27;: True, &#x27;isOriginal&#x27;: False, &#x27;isReserved&#x27;: False, &#x27;isSoldOut&#x27;: False, &#x27;legacySku&#x27;: &#x27;P180-U413499-A6858357&#x27;, &#x27;material&#x27;: &#x27;Canvas&#x27;, &#x27;options&#x27;: [{&#x27;id&#x27;: &#x27;W38&#x27;, &#x27;framingTypeId&#x27;: 0, &#x27;extendedDescription&#x27;: &#x27;&#x27;, &#x27;title&#x27;: &#x27;White Canvas&#x27;, &#x27;description&#x27;: &#x27;Sides of canvas are white&#x27;, &#x27;price&#x27;: 0, &#x27;width&#x27;: &#x27;0&#x27;, &#x27;height&#x27;: &#x27;0&#x27;}, {&#x27;id&#x27;: &#x27;W39&#x27;, &#x27;framingTypeId&#x27;: 0, &#x27;extendedDescription&#x27;: &#x27;&#x27;, &#x27;title&#x27;: &#x27;Black Canvas&#x27;, &#x27;description&#x27;: &#x27;Sides of canvas are black&#x27;, &#x27;price&#x27;: 0, &#x27;width&#x27;: &#x27;0&#x27;, &#x27;height&#x27;: &#x27;0&#x27;}], &#x27;price&#x27;: 24000, &#x27;sku&#x27;: &#x27;P180-U413499-A6858357-T2&#x27;, &#x27;unitsProduced&#x27;: 9999, &#x27;width&#x27;: &#x27;24&#x27;, &#x27;print&#x27;: {&#x27;recommended_option_id&#x27;: &#x27;W38&#x27;}}, {&#x27;depth&#x27;: &#x27;0.1&#x27;, &#x27;height&#x27;: &#x27;30&#x27;, &#x27;id&#x27;: 181, &#x27;isAple&#x27;: False, &#x27;isAvailableForSale&#x27;: True, &#x27;isLimitedEdition&#x27;: False, &#x27;isOpenEdition&#x27;: True, &#x27;isOriginal&#x27;: False, &#x27;isReserved&#x27;: False, &#x27;isSoldOut&#x27;: False, &#x27;legacySku&#x27;: &#x27;P181-U413499-A6858357&#x27;, &#x27;material&#x27;: &#x27;Canvas&#x27;, &#x27;options&#x27;: [{&#x27;id&#x27;: &#x27;W38&#x27;, &#x27;framingTypeId&#x27;: 0, &#x27;extendedDescription&#x27;: &#x27;&#x27;, &#x27;title&#x27;: &#x27;White Canvas&#x27;, &#x27;description&#x27;: &#x27;Sides of canvas are white&#x27;, &#x27;price&#x27;: 0, &#x27;width&#x27;: &#x27;0&#x27;, &#x27;height&#x27;: &#x27;0&#x27;}, {&#x27;id&#x27;: &#x27;W39&#x27;, &#x27;framingTypeId&#x27;: 0, &#x27;extendedDescription&#x27;: &#x27;&#x27;, &#x27;title&#x27;: &#x27;Black Canvas&#x27;, &#x27;description&#x27;: &#x27;Sides of canvas are black&#x27;, &#x27;price&#x27;: 0, &#x27;width&#x27;: &#x27;0&#x27;, &#x27;height&#x27;: &#x27;0&#x27;}], &#x27;price&#x27;: 34500, &#x27;sku&#x27;: &#x27;P181-U413499-A6858357-T2&#x27;, &#x27;unitsProduced&#x27;: 9999, &#x27;width&#x27;: &#x27;30&#x27;, &#x27;print&#x27;: {&#x27;recommended_option_id&#x27;: &#x27;W38&#x27;}}], &#x27;redirectToPrints&#x27;: False, &#x27;slug&#x27;: &#x27;New-Media-Space-Face-Gallery-Edition&#x27;, &#x27;styles&#x27;: [&#x27;Abstract&#x27;, &#x27;Surrealism&#x27;, &#x27;Pop Art&#x27;, &#x27;Art Deco&#x27;, &#x27;Cubism&#x27;], &#x27;subject&#x27;: &#x27;Abstract&#x27;, &#x27;title&#x27;: &#x27;Space Face - Gallery Edition&#x27;, &#x27;uploadedAt&#x27;: 1573138875, &#x27;userId&#x27;: 413499, &#x27;views&#x27;: 56, &#x27;visibility&#x27;: &#x27;published&#x27;, &#x27;width&#x27;: &#x27;59.44&#x27;}, &#x27;artist&#x27;: {&#x27;addressLine1&#x27;: &#x27;&#x27;, &#x27;addressLine2&#x27;: &#x27;&#x27;, &#x27;avatarUrl&#x27;: &#x27;https://d38we5ntdyxyje.cloudfront.net/413499/profile/SZOUUHDN_avatar_small_square.jpg&#x27;, &#x27;badges&#x27;: [{&#x27;image&#x27;: &#x27;//d3t95n9c6zzriw.cloudfront.net/badges/badge-featured.svg&#x27;, &#x27;title&#x27;: &#x27;Artist featured in a collection&#x27;, &#x27;description&#x27;: &#x27;Artist featured by Saatchi Art in a collection&#x27;}], &#x27;city&#x27;: &#x27;London&#x27;, &#x27;countryCode&#x27;: &#x27;GB&#x27;, &#x27;countryName&#x27;: &#x27;United Kingdom&#x27;, &#x27;description&#x27;: &#x27;&#x27;, &#x27;firstName&#x27;: &#x27;Czar&#x27;, &#x27;joinedAt&#x27;: 1362529169, &#x27;lastName&#x27;: &#x27;Catstick&#x27;, &#x27;postalCode&#x27;: &#x27;&#x27;, &#x27;profileUrl&#x27;: &#x27;https://legacy-develop.www.qa.saatchiart.com/Catstick&#x27;, &#x27;state&#x27;: &#x27;&#x27;, &#x27;studioImageUrl&#x27;: &#x27;&#x27;, &#x27;styles&#x27;: [], &#x27;userId&#x27;: 413499, &#x27;youtubeId&#x27;: &#x27;&#x27;}, &#x27;curationStatus&#x27;: 1}}
+&lt;RequestsCookieJar[&lt;Cookie saatchivc=vc_dhqsiirqbm for .saatchiart.com/&gt;, &lt;Cookie User-Continent=NA for www.qa.saatchiart.com/&gt;, &lt;Cookie User-Country=US for www.qa.saatchiart.com/&gt;, &lt;Cookie User-Device-OS= for www.qa.saatchiart.com/&gt;, &lt;Cookie User-Region=CA for www.qa.saatchiart.com/&gt;]&gt;
+{&#x27;Content-Type&#x27;: &#x27;application/json; charset=utf-8&#x27;, &#x27;Server-Timing&#x27;: &#x27;intid;desc=6acabb3687f65e43&#x27;, &#x27;X-Powered-By&#x27;: &#x27;Express&#x27;, &#x27;Authenticated-User&#x27;: &#x27;false&#x27;, &#x27;ETag&#x27;: &#x27;W/&quot;53b8-tM9zYyK+xhJqS41+ffRBFpww8XU&quot;&#x27;, &#x27;Content-Encoding&#x27;: &#x27;gzip&#x27;, &#x27;Strict-Transport-Security&#x27;: &#x27;max-age=15724800; includeSubDomains&#x27;, &#x27;Date&#x27;: &#x27;Thu, 03 Sep 2020 20:02:18 GMT&#x27;, &#x27;Content-Length&#x27;: &#x27;3013&#x27;, &#x27;Connection&#x27;: &#x27;keep-alive&#x27;, &#x27;Vary&#x27;: &#x27;Accept-Encoding&#x27;, &#x27;Set-Cookie&#x27;: &#x27;saatchivc=vc_dhqsiirqbm; Max-Age=1662235338; Domain=.saatchiart.com; Path=/; Expires=Sun, 07 May 2073 16:04:36 GMT; Secure, User-Continent=NA; path=/, User-Country=US; path=/, User-Region=CA; path=/, User-Device-OS=; path=/&#x27;, &#x27;Content-Security-Policy&#x27;: &quot;default-src https: data: &#x27;unsafe-inline&#x27; &#x27;unsafe-eval&#x27;; child-src https: data: blob:; connect-src https: data: blob:; font-src https: data:; img-src https: data:; media-src blob: data: https:; object-src https:; script-src https: data: blob: &#x27;unsafe-inline&#x27; &#x27;unsafe-eval&#x27;; style-src https: &#x27;unsafe-inline&#x27;; block-all-mixed-content; upgrade-insecure-requests;&quot;, &#x27;X-XSS-Protection&#x27;: &#x27;1; mode=block&#x27;, &#x27;X-Content-Type-Options&#x27;: &#x27;nosniff&#x27;}
+<br/></div></td></tr></tbody></table></body></html>
